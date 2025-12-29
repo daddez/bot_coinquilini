@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Alibhi – Spesa</title>
+  <style>
+    :root { --gap: 10px; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { position: sticky; top: 0; padding: 12px; background: #fff8dc; border-bottom: 1px solid #eed; }
+    .finish { display: block; width: 100%; padding: 14px 16px; font-size: 18px; font-weight: 700; background: #ffd60a; border: 2px solid #e63946; border-radius: 10px; cursor: pointer; }
+    main { padding: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--gap); }
+    .tile { display:flex; align-items:center; justify-content:center; border: 1px solid #ddd; border-radius: 12px; padding: 8px; text-align:center; background:#fff; box-shadow: 0 1px 3px rgba(0,0,0,0.06); aspect-ratio: 1 / 1; cursor: pointer; }
+    .tile:hover { outline: 2px solid #bbdefb; }
+    .empty { color: #777; text-align:center; padding: 24px; }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(location.search);
+      const sessionToken = params.get('t');
+      const purchased = new Set();
+      if (!sessionToken) {
+        document.body.innerHTML = '<p style="padding:20px;color:#b00">Link non valido.</p>';
+        return;
+      }
+      function api(path) { return new URL(path, window.location.href).toString(); }
+      async function loadItems(){
+        let res;
+        try {
+          res = await fetch(api(`./api/items?t=${sessionToken}`));
+        } catch (e) {
+          document.body.innerHTML = '<p style="padding:20px;color:#b00">Errore nel caricamento (rete).</p>';
+          return;
+        }
+        if (!res.ok){
+          let msg = ''; try { msg = await res.text(); } catch(e){}
+          document.body.innerHTML = `<p style="padding:20px;color:#b00">Errore nel caricamento (HTTP ${res.status}).<br>${msg || ''}</p>`;
+          return;
+        }
+        const items = await res.json();
+        render(items);
+      }
+      function render(items){
+        const grid = document.getElementById('grid');
+        const empty = document.getElementById('empty');
+        grid.innerHTML = '';
+        if (!items.length){ empty.style.display = 'block'; return; } else { empty.style.display = 'none'; }
+        items.forEach(it => {
+          const div = document.createElement('div');
+          div.className = 'tile';
+          div.textContent = it.name;
+          div.onclick = async ()=>{
+            const ok = await buy(it.id);
+            if (ok){
+              purchased.add(JSON.stringify({id: it.id, name: it.name}));
+              div.remove();
+              if (!grid.children.length){ empty.style.display = 'block'; }
+            }
+          };
+          grid.appendChild(div);
+        });
+      }
+      async function buy(id){
+        const res = await fetch(api('./api/buy'), {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, t: sessionToken })
+        });
+        return res.ok;
+      }
+      document.getElementById('finishBtn').onclick = async ()=>{
+        const items = Array.from(purchased).map(JSON.parse);
+        const res = await fetch(api('./api/finish'), {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ t: sessionToken, items })
+        });
+        if (res.ok){
+          const tgDeepLink = "tg://resolve?domain=lacasaospedaliera_bot";
+          const tgHttpLink = "https://t.me/lacasaospedaliera_bot";
+          location.href = tgDeepLink;
+          setTimeout(()=>{ window.location.href = tgHttpLink; }, 400);
+          setTimeout(()=>{ window.close(); }, 1000);
+        } else {
+          let msg = ''; try { msg = await res.text(); } catch(e){}
+          alert(`Errore nella chiusura della spesa (${res.status})\n${msg}`);
+        }
+      };
+      loadItems();
+    });
+  </script>
+</head>
+<body>
+  <header>
+    <button id="finishBtn" class="finish">FINE SPESA</button>
+  </header>
+  <main>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" style="display:none">Nessun prodotto da acquistare.</div>
+  </main>
+  <div id="grid"></div>
+</body>
+</html>

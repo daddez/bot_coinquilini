@@ -1,0 +1,57 @@
+<!doctype html><html lang="it"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Ricevute</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --lcd-bg:#0d1a0d;
+  --lcd-fg:#8cff9a;
+  --lcd-fg-dim:#58d36e;
+  --lcd-glow:#36ff7a;
+  --lcd-sep:#112612;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#fff;color:#111}
+header.lcd{position:sticky; top:0; z-index:10;background:#0d1a0d; color:#8cff9a; border-bottom:3px solid #000}
+.lcd-line{max-width:1100px; margin:0 auto; padding:10px 12px;display:flex; align-items:center; justify-content:center}
+#hdrFit{display:block; white-space:nowrap; font-weight:800; letter-spacing:.5px;text-shadow:0 0 2px #8cff9a, 0 0 6px #36ff7a, 0 0 14px #36ff7a, 0 0 28px #36ff7a}
+#hdrFit{ font-size: clamp(12px, 4vw, 36px) }
+@media (max-width:700px){.lcd-line{ padding:8px 10px; }}
+.neon{color:var(--lcd-fg);text-shadow:0 0 2px var(--lcd-fg),0 0 6px var(--lcd-glow),0 0 14px var(--lcd-glow),0 0 28px var(--lcd-glow)}
+.neon-dim{color:var(--lcd-fg-dim);text-shadow:0 0 1px var(--lcd-fg-dim),0 0 4px var(--lcd-glow)}
+#countdown{font-family:"Share Tech Mono","Orbitron",ui-monospace,Menlo,Consolas,monospace;font-weight:600;letter-spacing:.06em}
+.wrap{max-width:900px;margin:0 auto;padding:12px}
+.viewer{position:relative;display:flex;align-items:center;justify-content:center;border:1px solid #ddd;border-radius:12px;overflow:hidden;width:100%;height:clamp(280px,70svh,720px)}
+.viewer img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+.caption{margin-top:10px;border:2px solid #000;padding:10px;border-radius:8px;font-weight:800;max-height:20svh;overflow:auto}
+.nav{position:absolute;top:50%;transform:translateY(-50%);font-size:32px;line-height:32px;padding:12px;cursor:pointer;user-select:none;background:rgba(255,255,255,.7);border-radius:10px}
+.nav.left{left:8px}.nav.right{right:8px}
+@media (max-width:700px){.lcd-bar{padding:8px 10px; gap:10px}#countdown{font-size:clamp(20px, 5.5vw, 38px)}}
+</style>
+</head><body>
+<header class="lcd"><div class="lcd-line"><span id="hdrFit" class="neon">RIEPILOGO WEB CREATO PER ···, SCADE TRA: --:--:--</span></div></header>
+<div class="wrap">
+  <div class="viewer">
+    <div class="nav left" onclick="prev()">&#x25C0;</div>
+    <img id="img" alt="ricevuta" onclick="toggleFS()"/>
+    <div class="nav right" onclick="next()">&#x25B6;</div>
+  </div>
+  <div class="caption" id="cap"></div>
+</div>
+<script>
+function fmtClock(s){s=Math.max(0,Math.floor(s));const h=String(Math.floor(s/3600)).padStart(2,'0');const m=String(Math.floor((s%3600)/60)).padStart(2,'0');const sec=String(s%60).padStart(2,'0');return h+':'+m+':'+sec;}
+let i=0,data=[],countdownTimer=null;let whoText='···';
+const token=location.pathname.split("/")[3];
+async function loadCarousel(tok){const r=await fetch(`/contabilita/api/session/${tok}/carousel`);if(!r.ok){document.body.innerHTML='<p style="padding:20px">Questa pagina è scaduta o non esiste.</p>';return false;}data=await r.json();render();return true;}
+function render(){if(!data.length) return;const img=document.getElementById('img');const cap=document.getElementById('cap');img.src=data[i].url;cap.textContent=data[i].title||'';}
+function prev(){i=(i-1+data.length)%data.length;render();}
+function next(){i=(i+1)%data.length;render();}
+function toggleFS(){const img=document.getElementById('img');if(!document.fullscreenElement){if(img.requestFullscreen) img.requestFullscreen();} else {document.exitFullscreen();}}
+function fitHeader(minPx=12,maxPx=48){const el=document.getElementById('hdrFit');if(!el||!el.parentElement) return;const box=el.parentElement;el.style.fontSize=maxPx+'px';let lo=minPx,hi=maxPx,best=minPx;for(let k=0;k<12;k++){const mid=Math.floor((lo+hi)/2);el.style.fontSize=mid+'px';const fits=el.scrollWidth <= (box.clientWidth-2);if(fits){best=mid;lo=mid+1;} else {hi=mid-1;}}el.style.fontSize=best+'px';}
+async function loadSessionInfo(tok){try{const r=await fetch(`/contabilita/api/session/${tok}/info`);if(!r.ok) throw 0;const info=await r.json();const who=[info?.nome,info?.cognome].filter(Boolean).join(' ');whoText=who?who.toUpperCase():'···';let rem;if(typeof info.remaining_seconds==='number'){rem=info.remaining_seconds;} else if(info?.started_at){const started=new Date(info.started_at);rem=Math.max(0,(2*60*60)-((Date.now()-started.getTime())/1000));} else {rem=2*60*60;}const head=document.getElementById('hdrFit');head.textContent=`RIEPILOGO WEB CREATO PER ${whoText}, SCADE TRA: --:--:--`;fitHeader();startCountdown(rem);}catch{document.getElementById('hdrFit').textContent=`RIEPILOGO WEB CREATO PER ${whoText}, SCADE TRA: --:--:--`;fitHeader();startCountdown(10);}}
+function startCountdown(remainingSeconds){if(countdownTimer) clearInterval(countdownTimer);let r=Math.max(0,parseInt(remainingSeconds??0,10));function tick(){const head=document.getElementById('hdrFit');head.textContent=`RIEPILOGO WEB CREATO PER ${whoText}, SCADE TRA: ${fmtClock(r)}`;fitHeader();if(r<=0){clearInterval(countdownTimer);fetch(`/contabilita/api/session/${token}/close`, {method:'POST'}).finally(()=>{document.body.innerHTML="<p style='padding:20px;color:#a00;font-weight:bold'>La sessione è scaduta.</p>";});return;}r-=1;}tick();countdownTimer=setInterval(tick,1000);} 
+const ro = new ResizeObserver(()=>fitHeader());ro.observe(document.documentElement);window.addEventListener('orientationchange', ()=>fitHeader());window.addEventListener('load', ()=>fitHeader());
+(async function(){await loadCarousel(token);await loadSessionInfo(token);})();
+</script>
+</body></html>
